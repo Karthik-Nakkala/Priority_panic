@@ -8,7 +8,6 @@ It uses the OpenAI client to interface with LLM APIs.
 import asyncio
 import json
 import os
-#should i write it here my key secret?
 import sys
 import textwrap
 from typing import Dict, List, Optional
@@ -17,19 +16,20 @@ from openai import OpenAI
 from priority_panic import PriorityPanicAction, PriorityPanicEnv
 
 # --- Configuration & Environment Variables ---
-# Set these in your terminal using $env:VAR_NAME = "value"
+# Best practice: Set these in your terminal using $env:VAR_NAME = "value"
 IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 HF_SPACE_URL = os.getenv("HF_SPACE_URL") or "https://madhubuilds-priority-panic.hf.space"
-API_KEY = os.getenv("HF_Token") or "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"
+
+# Prioritizes the environment variable for security, falls back to local key for convenience
+API_KEY = os.getenv("HF_Token") or os.getenv("HF_TOKEN") or "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"
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 
 # --- Benchmark Hyperparameters ---
 BENCHMARK = "priority_panic"
-MAX_STEPS = 15  # Matches the Environment Overhaul
-TEMPERATURE = 0.4 # Slightly lower for more consistent logic
+MAX_STEPS = 15 
+TEMPERATURE = 0.4 
 MAX_TOKENS = 500
-SUCCESS_SCORE_THRESHOLD = 0.5
 
 def validate_config() -> bool:
     """Validate required environment variables before execution."""
@@ -88,7 +88,7 @@ def get_model_action(client: OpenAI, observation: Dict) -> Dict:
             ],
             temperature=TEMPERATURE,
             max_tokens=MAX_TOKENS,
-            response_format={ "type": "json_object" } # Force JSON if supported
+            response_format={ "type": "json_object" } 
         )
         return json.loads(completion.choices[0].message.content)
     except Exception as exc:
@@ -129,8 +129,11 @@ async def run_level(client: OpenAI, env, level: str) -> float:
         if result.done:
             break
 
-    final_score = sum(rewards) # Cumulative reward
-    success = final_score > 0 # Simple success check for complex RL
+    # Normalize individual level score between 0.0 and 1.0 for rubric compliance
+    raw_score = sum(rewards)
+    final_score = max(0.0, min(1.0, raw_score)) 
+    
+    success = final_score > 0.1 # Success if model achieves positive utility
     log_end(success, total_steps, final_score, rewards)
     return final_score
 
@@ -154,7 +157,13 @@ async def main():
             score = await run_level(client, env, level)
             scores.append(score)
         
-        print(f"[DEBUG] Final Average Score: {sum(scores)/3:.3f}")
+        # Calculate Final Average and enforce 0.0-1.0 rubric bound
+        raw_avg = sum(scores) / len(levels)
+        final_avg = max(0.0, min(1.0, raw_avg))
+        
+        print("-" * 30)
+        print(f"[DEBUG] Final Average Score: {final_avg:.3f}")
+        print("-" * 30)
 
 if __name__ == "__main__":
     asyncio.run(main())
