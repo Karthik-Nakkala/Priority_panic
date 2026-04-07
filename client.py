@@ -1,59 +1,29 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
 
-"""Priority Panic Environment Client."""
+"""Priority Panic Environment Client — 15-Step Logic Sync."""
 
-from typing import Dict
-
+from typing import Dict, Any
 from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import State
 
+# Ensure these models match your local models.py
 from .models import PriorityPanicAction, PriorityPanicObservation
-
 
 class PriorityPanicEnv(
     EnvClient[PriorityPanicAction, PriorityPanicObservation, State]
 ):
     """
     Client for the Priority Panic Environment.
-
-    This client maintains a persistent WebSocket connection to the environment server,
-    enabling efficient multi-step interactions with lower latency.
-    Each client instance has its own dedicated environment session on the server.
-
-    Example:
-        >>> # Connect to a running server
-        >>> with PriorityPanicEnv(base_url="http://localhost:8000") as client:
-        ...     result = client.reset()
-        ...     print(result.observation.tasks)
-        ...
-        ...     from priority_panic import PriorityPanicAction
-        ...     result = client.step(PriorityPanicAction(ordered_task_ids=["T1", "T2"]))
-        ...     print(result.reward)
-
-    Example with Docker:
-        >>> # Automatically start container and connect
-        >>> client = PriorityPanicEnv.from_docker_image("priority_panic-env:latest")
-        >>> try:
-        ...     result = client.reset()
-        ...     result = client.step(PriorityPanicAction(message="Test"))
-        ... finally:
-        ...     client.close()
+    Handles the communication between your local inference script and the 
+    Hugging Face Space or Docker container.
     """
 
-    def _step_payload(self, action: PriorityPanicAction) -> Dict:
+    def _step_payload(self, action: PriorityPanicAction) -> Dict[str, Any]:
         """
-        Convert PriorityPanicAction to JSON payload for step message.
-
-        Args:
-            action: PriorityPanicAction instance
-
-        Returns:
-            Dictionary representation suitable for JSON encoding
+        Convert PriorityPanicAction to JSON payload for the server.
+        Matches the new 'Clean' server logic for the India AI Hackathon.
         """
         return {
             "ordered_task_ids": action.ordered_task_ids,
@@ -62,41 +32,34 @@ class PriorityPanicEnv(
             "reasoning": action.reasoning,
         }
 
-    def _parse_result(self, payload: Dict) -> StepResult[PriorityPanicObservation]:
+    def _parse_result(self, payload: Dict[str, Any]) -> StepResult[PriorityPanicObservation]:
         """
         Parse server response into StepResult[PriorityPanicObservation].
-
-        Args:
-            payload: JSON response data from server
-
-        Returns:
-            StepResult with PriorityPanicObservation
+        This fix removes the 'echoed_message' field that was causing the Pydantic crash.
         """
+        # Extract the observation block from the server response
         obs_data = payload.get("observation", {})
+        
+        # Create the Pydantic observation object with the new schema
         observation = PriorityPanicObservation(
             tasks=obs_data.get("tasks", []),
-            available_energy=obs_data.get("available_energy", 5),
+            available_energy=obs_data.get("available_energy", 0),
             waiting_person=obs_data.get("waiting_person", ""),
             level=obs_data.get("level", "easy"),
             done=payload.get("done", False),
-            reward=payload.get("reward"),
+            reward=payload.get("reward", 0.0),
+            metadata=obs_data.get("metadata", {}),
         )
 
         return StepResult(
             observation=observation,
-            reward=payload.get("reward"),
+            reward=payload.get("reward", 0.0),
             done=payload.get("done", False),
         )
 
-    def _parse_state(self, payload: Dict) -> State:
+    def _parse_state(self, payload: Dict[str, Any]) -> State:
         """
-        Parse server response into State object.
-
-        Args:
-            payload: JSON response from state request
-
-        Returns:
-            State object with episode_id and step_count
+        Parse server response into State object for session tracking.
         """
         return State(
             episode_id=payload.get("episode_id"),

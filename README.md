@@ -10,65 +10,83 @@ license: other
 short_description: 'RL environment: prioritize tasks under pressure.'
 tags:
   - openenv
+  - reinforcement-learning
+  - pytorch
 ---
 
-🧩 Problem Statement
+# 🚨 Priority Panic: OpenEnv Decision-Making Environment
 
-AI systems today are highly capable of generating responses but lack the ability to operate in **real-world, dynamic decision-making scenarios**.
-There is no standardized, open environment where AI agents can learn to handle **multi-step workflows involving uncertainty, evolving states, and consequences**.
+AI systems today are highly capable of generating responses but often struggle in **real-world, dynamic decision-making scenarios**. **Priority Panic** is a Reinforcement Learning (RL) environment designed to bridge this gap, forcing agents to operate within evolving states and mounting consequences.
 
-> Inspired by a real situation — two students, four days, no prior experience, and a decision to build anyway.
-> Every task in this environment is something we personally faced while building it.
-> The agent that learns this, learns what we learned the hard way.
+> **The Backstory:** Inspired by a real situation — two students, few days left for submission, no prior experience, and a decision to build anyway. Every task in this environment is something we personally faced while building it. The agent that learns this, learns what we learned the hard way.
+> **"This isn’t a toy problem. Every human has lived this. Now AI can learn it too."**
+---
+
+## 🧠 The "Panic" Mechanism (Core Innovation)
+
+This environment isn't just about ordering a list; it’s about surviving a **"Panic Spiral."**
+
+* **Exponential Age Penalty:** For every step a task remains unfinished, its negative weight grows exponentially. 
+    * *Formula:* $Penalty = -0.1 \times e^{(0.2 \times \text{task\_age})}$
+* **Dynamic Pressure:** The environment is alive. New "Panic Tasks" spawn unexpectedly at **Steps 3, 7, and 10**, simulating real-world interruptions and deadline shifts.
+* **Binary Completion:** Tasks are only "cleared" if the agent allocates sufficient energy bandwidth in a single step, requiring strategic resource management.
 
 ---
 
-💡 Solution
+## 📊 Benchmark Results (Proven Baseline)
 
-**Priority Panic**, An **Reinforcement Learning (RL)-based OpenEnv environment** where AI agents:
+We benchmarked this environment using the **Qwen/Qwen2.5-72B-Instruct** model over a full **15-step horizon**. The results demonstrate the environment's ability to challenge high-tier LLMs.
 
-* Interact with **dynamic, stateful scenarios**
-* Take **sequential actions** within a defined action space
-* Learn through **verifiable reward functions** based on outcomes
+| Difficulty | Steps | Cumulative Score | Status |
+| :--- | :--- | :--- | :--- |
+| 🟢 **Easy** | 15 | 2.689 | ✅ Success |
+| 🟡 **Medium** | 15 | 8.534 | ✅ Success |
+| 🔴 **Hard** | 15 | 17.190 | ✅ Success |
+| **OVERALL** | **15** | **9.471** | **Verified Baseline** |
 
-This enables **multi-step decision-making, policy learning, and environment simulation**, shifting AI from passive response generation to **active, real-world decision-making systems**.
+---
+
+## 💡 Solution Architecture
+
+We introduce a **stateful OpenEnv environment** where AI agents:
+* Interact with **dynamic scenarios** (Tasks, Energy, Waiting Persons).
+* Take **sequential actions** (Prioritizing vs. Dropping vs. Communicating).
+* Learn through **verifiable reward functions** that penalize procrastination and reward efficiency.
 
 ---
 
 ## 🎯 Difficulty Levels
 
-* 🟢 Simple — basic ordering decisions
-* 🟡 Medium — multi-step workflows
-* 🔴 Complex — multi-constraint planning
+* **Simple:** Basic ordering decisions with ample energy.
+* **Medium:** Multi-step workflows with task dependencies.
+* **Complex:** Multi-constraint planning with dynamic spawns and low energy.
 
 ---
 
-> This isn’t a toy problem. Every human has lived this.
-> Now AI can learn it too.
+## 🚀 Quick Start
 
+The client is **async by default** and compatible with the OpenEnv framework.
 
-## Quick Start
-
-The client is **async by default**:
 ```python
 import asyncio
 from priority_panic import PriorityPanicAction, PriorityPanicEnv
 
 async def main():
-    client = await PriorityPanicEnv.from_docker_image("priority_panic-env:latest")
+    # Connect to the live Hugging Face Space
+    client = PriorityPanicEnv(base_url="[https://madhubuilds-priority-panic.hf.space](https://madhubuilds-priority-panic.hf.space)")
 
     async with client:
-        result = await client.reset()
-        print(f"Level: {result.observation.level}")
-        print(f"Tasks: {result.observation.tasks}")
+        result = await client.reset(level="hard")
+        print(f"Current Tasks: {result.observation.tasks}")
 
         action = PriorityPanicAction(
-            ordered_task_ids=["T1", "T3", "T5", "T2", "T4"],
-            dropped_task_ids=[],
-            message_to_waiting_person="",
-            reasoning="Urgent tasks first"
+            ordered_task_ids=["T1", "T3"],
+            dropped_task_ids=["T5"],
+            message_to_waiting_person="I'm on it!",
+            reasoning="T1 is aging rapidly; T3 is high priority."
         )
+        
         result = await client.step(action)
-        print(f"Reward: {result.reward}")
+        print(f"Step Reward: {result.reward}")
 
 asyncio.run(main())
