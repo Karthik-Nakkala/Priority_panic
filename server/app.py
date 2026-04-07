@@ -28,65 +28,51 @@ Usage:
     python -m server.app
 """
 
+import os
+import sys
+
+# Standardize pathing so imports work whether running from root or server/
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 try:
     from openenv.core.env_server.http_server import create_app
-except Exception as e:  # pragma: no cover
+except Exception as e:
     raise ImportError(
-        "openenv is required for the web interface. Install dependencies with '\n    uv sync\n'"
+        "openenv is required for the web interface. Install dependencies with 'uv sync'"
     ) from e
 
+# Cleaned up imports to avoid redundancy
 try:
-
     from models import PriorityPanicAction, PriorityPanicObservation
     from server.priority_panic_environment import PriorityPanicEnvironment
-except ModuleNotFoundError:
+except ImportError:
     from ..models import PriorityPanicAction, PriorityPanicObservation
     from .priority_panic_environment import PriorityPanicEnvironment
 
-    from ..models import PriorityPanicAction, PriorityPanicObservation
-    from .priority_panic_environment import PriorityPanicEnvironment
-except ModuleNotFoundError:
-    from models import PriorityPanicAction, PriorityPanicObservation
-    from server.priority_panic_environment import PriorityPanicEnvironment
-
-
-
-# Create the app with web interface and README integration
+# Create the app instance
 app = create_app(
     PriorityPanicEnvironment,
     PriorityPanicAction,
     PriorityPanicObservation,
     env_name="priority_panic",
-    max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
+    max_concurrent_envs=1,
 )
 
-
-def main(host: str = "0.0.0.0", port: int = 8000):
+def main(host: str = "0.0.0.0", port: int = 7860):
     """
-    Entry point for direct execution via uv run or python -m.
-
-    This function enables running the server without Docker:
-        uv run --project . server
-        uv run --project . server --port 8001
-        python -m priority_panic.server.app
-
-    Args:
-        host: Host address to bind to (default: "0.0.0.0")
-        port: Port number to listen on (default: 8000)
-
-    For production deployments, consider using uvicorn directly with
-    multiple workers:
-        uvicorn priority_panic.server.app:app --workers 4
+    Entry point for direct execution. 
+    Note: Port 7860 is required for Hugging Face Spaces compatibility.
     """
     import uvicorn
-
-    uvicorn.run(app, host=host, port=port)
-
+    # Use string reference to allow for better worker management
+    uvicorn.run("server.app:app", host=host, port=port, reload=False)
 
 if __name__ == "__main__":
     import argparse
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000)
+    # Defaulting to 7860 for HF/OpenEnv compatibility
+    parser.add_argument("--host", type=str, default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=7860)
     args = parser.parse_args()
-    main(port=args.port)
+    
+    main(host=args.host, port=args.port)
