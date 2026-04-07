@@ -11,6 +11,7 @@ short_description: 'RL environment: prioritize tasks under pressure.'
 tags:
   - openenv
 ---
+
 🧩 Problem Statement
 
 AI systems today are highly capable of generating responses but lack the ability to operate in **real-world, dynamic decision-making scenarios**.
@@ -21,7 +22,9 @@ There is no standardized, open environment where AI agents can learn to handle *
 > The agent that learns this, learns what we learned the hard way.
 
 ---
----
+
+💡 Solution
+
 **Priority Panic**, An **Reinforcement Learning (RL)-based OpenEnv environment** where AI agents:
 
 * Interact with **dynamic, stateful scenarios**
