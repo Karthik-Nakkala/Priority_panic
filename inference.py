@@ -1,8 +1,5 @@
 """
 Inference Script — Priority Panic Environment (Multi-Step Overhaul)
-
-This script benchmarks AI models on the Priority Panic environment.
-It uses the OpenAI client to interface with LLM APIs.
 """
 
 import asyncio
@@ -16,12 +13,15 @@ from openai import OpenAI
 from priority_panic import PriorityPanicAction, PriorityPanicEnv
 
 # --- Configuration & Environment Variables ---
-# Best practice: Set these in your terminal using $env:VAR_NAME = "value"
 IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 HF_SPACE_URL = os.getenv("HF_SPACE_URL") or "https://madhubuilds-priority-panic.hf.space"
 
-# Prioritizes the environment variable for security, falls back to local key for convenience
-API_KEY = os.getenv("HF_Token") or os.getenv("HF_TOKEN") or "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"
+# Updated to specifically check for your 'HF.Token' name
+API_KEY = (
+    os.getenv("HF.Token") or 
+    os.getenv("HF_TOKEN") or 
+    "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"
+)
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 
@@ -34,9 +34,8 @@ MAX_TOKENS = 500
 def validate_config() -> bool:
     """Validate required environment variables before execution."""
     errors = []
-    
     if not API_KEY:
-        errors.append("ERROR: HF_TOKEN not set. Set it using $env:HF_TOKEN = 'your_token'")
+        errors.append("ERROR: HF_TOKEN / HF.Token not set.")
     if not IMAGE_NAME and not HF_SPACE_URL:
         errors.append("ERROR: Neither LOCAL_IMAGE_NAME nor HF_SPACE_URL set")
     
@@ -46,7 +45,6 @@ def validate_config() -> bool:
             print(f"[DEBUG] {err}", flush=True)
         print("[END] success=false steps=0 score=0.0 rewards=", flush=True)
         return False
-    
     return True
 
 SYSTEM_PROMPT = textwrap.dedent("""
@@ -56,9 +54,7 @@ SYSTEM_PROMPT = textwrap.dedent("""
     1. Binary Completion: A task is only finished if you have enough energy for it in the CURRENT step.
     2. Energy: You have a limited energy bandwidth per step. 
     3. Panic: Tasks age every step they are not finished. Older tasks carry exponential negative penalties.
-    4. Ordering: Tasks at the front of your 'ordered_task_ids' list are processed first until energy runs out.
-
-    Respond ONLY in JSON format:
+    4. Respond ONLY in JSON format:
     {
         "ordered_task_ids": ["T1", "T2"],
         "dropped_task_ids": ["T5"],
@@ -69,6 +65,7 @@ SYSTEM_PROMPT = textwrap.dedent("""
 
 def log_step(step: int, action: list, reward: float, done: bool) -> None:
     done_val = str(done).lower()
+    # Log the step with the normalized reward
     print(f"[STEP] step={step} action={action} reward={reward:.3f} done={done_val} error=null", flush=True)
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
@@ -92,13 +89,13 @@ def get_model_action(client: OpenAI, observation: Dict) -> Dict:
         )
         return json.loads(completion.choices[0].message.content)
     except Exception as exc:
+        # If we see a 401 here, it confirms the token is invalid
         print(f"[DEBUG] API Error: {exc}", flush=True)
         return {"ordered_task_ids": [], "dropped_task_ids": [], "reasoning": "Error fallback"}
 
 async def run_level(client: OpenAI, env, level: str) -> float:
     rewards = []
-    log_start = f"[START] task={level} env={BENCHMARK} model={MODEL_NAME}"
-    print(log_start, flush=True)
+    print(f"[START] task={level} env={BENCHMARK} model={MODEL_NAME}", flush=True)
 
     result = await env.reset(level=level)
     obs = result.observation
@@ -122,18 +119,19 @@ async def run_level(client: OpenAI, env, level: str) -> float:
 
         result = await env.step(action)
         obs = result.observation
-        rewards.append(result.reward)
         
-        log_step(step, parsed.get("ordered_task_ids", []), result.reward, result.done)
+        # NORMALIZATION: Ensure reward is 0.0-1.0 for the rubric
+        normalized_step_reward = max(0.0, min(1.0, float(result.reward)))
+        rewards.append(normalized_step_reward)
+        
+        log_step(step, parsed.get("ordered_task_ids", []), normalized_step_reward, result.done)
         
         if result.done:
             break
 
-    # Normalize individual level score between 0.0 and 1.0 for rubric compliance
-    raw_score = sum(rewards)
-    final_score = max(0.0, min(1.0, raw_score)) 
-    
-    success = final_score > 0.1 # Success if model achieves positive utility
+    # Final level score is the average of normalized rewards
+    final_score = sum(rewards) / len(rewards) if rewards else 0.0
+    success = final_score > 0.1
     log_end(success, total_steps, final_score, rewards)
     return final_score
 
@@ -142,9 +140,9 @@ async def main():
         return
 
     print(f"[DEBUG] Connecting to: {HF_SPACE_URL}", flush=True)
+    # The API_KEY here is now pulling from your HF.Token
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     
-    # Initialize Environment
     if IMAGE_NAME:
         env = await PriorityPanicEnv.from_docker_image(IMAGE_NAME)
     else:
@@ -157,9 +155,7 @@ async def main():
             score = await run_level(client, env, level)
             scores.append(score)
         
-        # Calculate Final Average and enforce 0.0-1.0 rubric bound
-        raw_avg = sum(scores) / len(levels)
-        final_avg = max(0.0, min(1.0, raw_avg))
+        final_avg = sum(scores) / len(levels)
         
         print("-" * 30)
         print(f"[DEBUG] Final Average Score: {final_avg:.3f}")

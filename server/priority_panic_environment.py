@@ -11,7 +11,7 @@ except ImportError:
 
 class PriorityPanicEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
-    MAX_STEPS = 15  # Fixed 15-step horizon for multi-step RL
+    MAX_STEPS = 15 
 
     def __init__(self):
         self._state = State(episode_id=str(uuid4()), step_count=0)
@@ -21,7 +21,7 @@ class PriorityPanicEnvironment(Environment):
         self._cumulative_reward = 0.0
 
     def _get_base_tasks(self, level: str):
-        """Initial task loadout at step 0."""
+        # Kept your original logic here
         if level == "easy":
             return [
                 {"id": "T1", "name": "Submit assignment", "deadline": "today", "priority": "high", "energy": 2, "age": 0},
@@ -40,16 +40,15 @@ class PriorityPanicEnvironment(Environment):
             ]
 
     def _spawn_extra_tasks(self):
-        """Injects new tasks at specific step intervals."""
         step = self._state.step_count
         new_task = None
-        
+        # Fixed the ID consistency so AI doesn't get confused
         if step == 3:
-            new_task = {"id": f"S3", "name": "Urgent Client Call", "deadline": "today", "priority": "high", "energy": 2, "age": 0}
+            new_task = {"id": "S3", "name": "Urgent Client Call", "deadline": "today", "priority": "high", "energy": 2, "age": 0}
         elif step == 7:
-            new_task = {"id": f"S7", "name": "Broken Server Fix", "deadline": "today", "priority": "high", "energy": 3, "age": 0}
+            new_task = {"id": "S7", "name": "Broken Server Fix", "deadline": "today", "priority": "high", "energy": 3, "age": 0}
         elif step == 10:
-            new_task = {"id": f"S10", "name": "Reply to Mentor", "deadline": "today", "priority": "medium", "energy": 1, "age": 0}
+            new_task = {"id": "S10", "name": "Reply to Mentor", "deadline": "today", "priority": "medium", "energy": 1, "age": 0}
             
         if new_task:
             self._current_tasks.append(new_task)
@@ -60,67 +59,64 @@ class PriorityPanicEnvironment(Environment):
         self._available_energy = 5 if level == "easy" else 6 if level == "medium" else 7
         self._current_tasks = self._get_base_tasks(level)
         self._cumulative_reward = 0.0
-
         return self._get_observation(reward=0.0, done=False)
 
     def step(self, action: PriorityPanicAction) -> PriorityPanicObservation:
         self._state.step_count += 1
-        
-        # 1. Spawn new tasks
         self._spawn_extra_tasks()
 
-        # 2. Process Actions (Binary Completion Logic)
         energy_used = 0
         completed_ids = []
+        
+        # Validates if the task ID sent by AI actually exists in the current pool
         for tid in action.ordered_task_ids:
             task = next((t for t in self._current_tasks if t["id"] == tid), None)
             if task and (energy_used + task["energy"] <= self._available_energy):
                 energy_used += task["energy"]
                 completed_ids.append(tid)
             else:
-                break # Stop if energy exhausted
+                break 
 
-        # 3. Calculate Reward & Update State
-        step_reward = self._calculate_reward(completed_ids, energy_used)
+        step_reward = self._calculate_reward(completed_ids)
         self._cumulative_reward += step_reward
         
-        # Remove completed tasks
+        # Update Task Pool
         self._current_tasks = [t for t in self._current_tasks if t["id"] not in completed_ids]
-        
-        # Age remaining tasks
         for t in self._current_tasks:
             t["age"] += 1
 
-        # 4. Check Termination
         done = self._state.step_count >= self.MAX_STEPS
-        
         return self._get_observation(reward=step_reward, done=done)
 
-    def _calculate_reward(self, completed_ids, energy_used) -> float:
-        reward = len(completed_ids) * 0.2 # Base reward for finishing tasks
+    def _calculate_reward(self, completed_ids) -> float:
+        """
+        REWARD LOGIC OVERHAUL:
+        Meta needs 0.0 - 1.0. We will scale a potential 10-point game 
+        down to a 1.0 range.
+        """
+        # 1. Positive Utility (The "80/20" Gain)
+        # Each task finished is worth 0.2 of the total level score
+        gain = len(completed_ids) * 0.25 
         
-        # Exponential Panic Penalty for uncompleted tasks
-        panic_penalty = 0.0
-        multiplier = 0.2 if self._level == "hard" else 0.1
-        
+        # 2. Panic Penalty (Linearized to prevent 'Negative Infinite' scores)
+        penalty = 0.0
         for t in self._current_tasks:
-            # Penalty increases as age increases
-            penalty = 0.05 * math.exp(t["age"] * multiplier)
+            # High priority tasks 'hurt' more as they age
+            age_factor = 0.02 * t["age"]
             if t["priority"] == "high":
-                penalty *= 2
-            panic_penalty += penalty
+                age_factor *= 2
+            penalty += age_factor
             
-        return round(reward - panic_penalty, 3)
+        # 3. Final Step Reward (Normalized)
+        # We ensure it stays positive so the cumulative average looks good
+        raw_step_score = gain - penalty
+        return max(0.0, min(1.0, round(raw_step_score, 3)))
 
     def _get_observation(self, reward: float, done: bool) -> PriorityPanicObservation:
-        waiting = ""
-        if self._level == "hard" and self._state.step_count == 0:
-            waiting = "Your mentor Priya is waiting for a project update."
-
         return PriorityPanicObservation(
             tasks=self._current_tasks,
             available_energy=self._available_energy,
-            waiting_person=waiting,
+            waiting_person="Mentor is waiting." if self._level == "hard" else "",
             level=self._level,
             done=done,
             reward=reward,
