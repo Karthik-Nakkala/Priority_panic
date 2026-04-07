@@ -13,10 +13,10 @@ API_KEY = (
     os.getenv("HF_TOKEN_1")
 )
 HF_SPACE_URL = os.getenv("HF_SPACE_URL") or "https://madhubuilds-priority-panic.hf.space"
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+API_BASE_URL = "https://router.huggingface.co/v1"
 
 # Using a more efficient model to avoid 402 Credit errors while maintaining high logic
-MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct" 
+MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct" 
 
 SYSTEM_PROMPT = textwrap.dedent("""
     You are a Crisis Management AI specializing in Task Prioritization. 
