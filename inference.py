@@ -6,15 +6,17 @@ from typing import Dict, List
 from openai import OpenAI
 from priority_panic import PriorityPanicAction, PriorityPanicEnv
 
-# --- Configuration ---
-HF_SPACE_URL = os.getenv("HF_SPACE_URL") or "https://madhubuilds-priority-panic.hf.space"
+# --- Configuration ---#
 
-# Using SambaNova for high-speed, free-tier inference
-API_BASE_URL = "https://api.sambanova.ai/v1"
-API_KEY = "12d928b2-7032-44e4-9062-0c73579c63dd" 
+# It will check for API_KEY first (SambaNova), then fallback to HF_TOKEN
+API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://api.sambanova.ai/v1"
 
-# Llama 3.3 70B is elite for reasoning tasks!
-MODEL_NAME = "Meta-Llama-3.3-70B-Instruct"
+if not API_KEY:
+    print("[ERROR] No API Key found. Please run: $env:API_KEY = 'your_key'")
+    exit()
+
+client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
 SYSTEM_PROMPT = textwrap.dedent("""
     You are a Crisis Management AI specializing in Task Prioritization. 
