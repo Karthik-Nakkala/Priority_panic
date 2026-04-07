@@ -8,6 +8,7 @@ It uses the OpenAI client to interface with LLM APIs.
 import asyncio
 import json
 import os
+#should i write it here my key secret?
 import sys
 import textwrap
 from typing import Dict, List, Optional
@@ -19,7 +20,7 @@ from priority_panic import PriorityPanicAction, PriorityPanicEnv
 # Set these in your terminal using $env:VAR_NAME = "value"
 IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 HF_SPACE_URL = os.getenv("HF_SPACE_URL") or "https://madhubuilds-priority-panic.hf.space"
-API_KEY = os.getenv("HF_TOKEN") or "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"
+API_KEY = os.getenv("HF_Token") or "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"
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 
